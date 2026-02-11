@@ -1,49 +1,82 @@
 import streamlit as st
 import joblib
-import pandas as pd
+import numpy as np
 from scipy.sparse import hstack
 
-# Load artifacts
-model = joblib.load(model.pkl)
-vectorizer = joblib.load(tfidf_vectorizer.pkl)
-sender_stats = joblib.load(sender_stats.pkl)
+# ==============================
+# Load Saved Artifacts
+# ==============================
 
-st.title(Phishing Email Detector)
+model = joblib.load("model.pkl")
+vectorizer = joblib.load("tfidf_vectorizer.pkl")
+sender_stats = joblib.load("sender_stats.pkl")
 
-st.write(Enter email content and sender address.)
+sender_cols = [
+    "sender_total_prev",
+    "sender_phish_prev",
+    "sender_phish_rate"
+]
 
-email_text = st.text_area(Email Text)
-sender_input = st.text_input(Sender Email)
+# ==============================
+# Prediction Function
+# ==============================
 
-def prepare_sender_features(sender)
-    row = sender_stats[sender_stats[sender_norm] == sender]
+def predict_email(text, sender):
 
-    if len(row) == 0
-        return pd.DataFrame([{
-            sender_total_prev 0,
-            sender_phish_prev 0,
-            sender_phish_rate 0
-        }])
-    
-    return row[[
-        sender_total_prev,
-        sender_phish_prev,
-        sender_phish_rate
-    ]]
+    # Clean inputs
+    text = text.lower().strip()
+    sender = sender.lower().strip()
 
-if st.button(Predict)
-    if email_text.strip() == 
-        st.warning(Please enter email text.)
-    else
-        text_features = vectorizer.transform([email_text])
-        sender_features = prepare_sender_features(sender_input).values
-        
-        combined = hstack([text_features, sender_features])
-        
-        prob = model.predict_proba(combined)[0][1]
-        pred = model.predict(combined)[0]
-        
-        if pred == 1
-            st.error(fPrediction Phishing ({prob.4f}))
-        else
-            st.success(fPrediction Legitimate ({1-prob.4f}))
+    # Transform text
+    text_features = vectorizer.transform([text])
+
+    # Get sender features
+    sender_row = sender_stats[
+        sender_stats["sender_norm"] == sender
+    ]
+
+    if len(sender_row) == 0:
+        sender_features = np.array([[0, 0, 0]])
+    else:
+        sender_features = sender_row[sender_cols].values
+
+    # Combine features
+    combined_features = hstack([text_features, sender_features])
+
+    # Predict
+    prob = model.predict_proba(combined_features)[0][1]
+    pred = model.predict(combined_features)[0]
+
+    return pred, prob
+
+
+# ==============================
+# Streamlit UI
+# ==============================
+
+st.set_page_config(page_title="Phishing Email Detector", layout="centered")
+
+st.title("📧 Phishing Email Detection System")
+st.markdown("Detect whether an email is phishing or legitimate using ML.")
+
+email_text = st.text_area("Enter Email Content")
+
+sender_input = st.text_input("Enter Sender Email (optional)")
+
+if st.button("Analyze Email"):
+
+    if email_text.strip() == "":
+        st.warning("Please enter email content.")
+    else:
+
+        prediction, probability = predict_email(
+            email_text,
+            sender_input if sender_input else "unknown_sender"
+        )
+
+        if prediction == 1:
+            st.error(f"⚠️ Prediction: Phishing ({probability:.4f})")
+        else:
+            st.success(f"✅ Prediction: Legitimate ({probability:.4f})")
+
+        st.write("Probability of phishing:", round(probability, 4))
